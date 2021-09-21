@@ -35,14 +35,14 @@ class OneloginAWS(object):
         self.all_roles = None
         self.role_arn = None
         self.credentials = None
-        self.duration_seconds = int(config['duration_seconds'])
+        self.duration_seconds = int(config["duration_seconds"])
         self.user_credentials = UserCredentials(config)
         self.mfa = MFACredentials(config)
 
-        base_uri_parts = self.config['base_uri'].split('.')
+        base_uri_parts = self.config["base_uri"].split(".")
         self.ol_client = OneLoginClient(
-            self.config['client_id'],
-            self.config['client_secret'],
+            self.config["client_id"],
+            self.config["client_secret"],
             base_uri_parts[1],
         )
 
@@ -54,10 +54,11 @@ class OneloginAWS(object):
         if self.ol_client.error is None:
             return response
 
-        raise Exception("Onelogin Error: '{error}' '{desc}'".format(
-            error=self.ol_client.error,
-            desc=self.ol_client.error_description
-        ))
+        raise Exception(
+            "Onelogin Error: '{error}' '{desc}'".format(
+                error=self.ol_client.error, desc=self.ol_client.error_description
+            )
+        )
 
     def get_saml_assertion(self):
         """
@@ -71,8 +72,8 @@ class OneloginAWS(object):
             self.ol_client.get_saml_assertion(
                 username_or_email=self.user_credentials.username,
                 password=self.user_credentials.password,
-                app_id=self.config['aws_app_id'],
-                subdomain=self.config['subdomain'],
+                app_id=self.config["aws_app_id"],
+                subdomain=self.config["subdomain"],
                 ip_address=self.get_ip_address(),
             )
         )
@@ -85,10 +86,10 @@ class OneloginAWS(object):
 
             saml_resp = self.check_for_errors(
                 self.ol_client.get_saml_assertion_verifying(
-                    self.config['aws_app_id'],
+                    self.config["aws_app_id"],
                     self.mfa.device.id,
                     saml_resp.mfa.state_token,
-                    self.mfa.otp
+                    self.mfa.otp,
                 )
             )
 
@@ -103,13 +104,13 @@ class OneloginAWS(object):
         """
 
         # if ip address has been hard coded in config file, use that
-        ip_address = self.config.get('ip_address')
+        ip_address = self.config.get("ip_address")
         if ip_address is not None:
             return ip_address
 
         # if auto determine is enabled, use ipify to lookup the ip
         if self.config.auto_determine_ip_address:
-            ip_address = get('https://api.ipify.org').text
+            ip_address = get("https://api.ipify.org").text
             return ip_address
 
     def get_arns(self):
@@ -119,8 +120,7 @@ class OneloginAWS(object):
             self.get_saml_assertion()
         # Parse the returned assertion and extract the authorized roles
         aws_roles = []
-        root = ElementTree.fromstring(
-            base64.b64decode(self.saml.saml_response))
+        root = ElementTree.fromstring(base64.b64decode(self.saml.saml_response))
 
         namespace = "{urn:oasis:names:tc:SAML:2.0:assertion}"
         role_name = "https://aws.amazon.com/SAML/Attributes/Role"
@@ -160,15 +160,13 @@ class OneloginAWS(object):
 
         if not self.role_arn:
             self.get_role()
-        if self.config['region']:
-            self.sts_client = boto3.client(
-                "sts",
-                region_name=self.config["region"])
+        if self.config["region"]:
+            self.sts_client = boto3.client("sts", region_name=self.config["region"])
         res = self.sts_client.assume_role_with_saml(
             RoleArn=self.role_arn,
             PrincipalArn=self.principal_arn,
             SAMLAssertion=self.saml.saml_response,
-            DurationSeconds=self.duration_seconds
+            DurationSeconds=self.duration_seconds,
         )
 
         self.credentials = res
@@ -188,7 +186,7 @@ class OneloginAWS(object):
 
         # Update with new credentials
         name = self.credentials["AssumedRoleUser"]["Arn"]
-        m = re.search(r'(arn\:aws([\w-]*)\:sts\:\:)(.*)', name)
+        m = re.search(r"(arn\:aws([\w-]*)\:sts\:\:)(.*)", name)
 
         if m is not None:
             name = m.group(3)
@@ -202,13 +200,13 @@ class OneloginAWS(object):
 
         # Set each value specifically instead of overwriting the entire
         # profile block in case they have other parameters defined
-        cred_config[name]['aws_access_key_id'] = creds["AccessKeyId"]
-        cred_config[name]['aws_secret_access_key'] = creds["SecretAccessKey"]
-        cred_config[name]['aws_session_token'] = creds["SessionToken"]
+        cred_config[name]["aws_access_key_id"] = creds["AccessKeyId"]
+        cred_config[name]["aws_secret_access_key"] = creds["SecretAccessKey"]
+        cred_config[name]["aws_session_token"] = creds["SessionToken"]
 
         # Set region for this profile if passed in via configuration
-        if self.config['region']:
-            cred_config[name]['region'] = self.config['region']
+        if self.config["region"]:
+            cred_config[name]["region"] = self.config["region"]
 
         with open(cred_file, "w") as cred_config_file:
             cred_config.write(cred_config_file)
@@ -221,7 +219,7 @@ class OneloginAWS(object):
         self.credentials = None
 
     def _initialize_credentials(self):
-        cred_file = os.environ.get('AWS_SHARED_CREDENTIALS_FILE', None)
+        cred_file = os.environ.get("AWS_SHARED_CREDENTIALS_FILE", None)
 
         if cred_file is None:
             cred_file = os.path.expanduser("~/.aws/credentials")

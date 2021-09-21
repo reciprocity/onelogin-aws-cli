@@ -12,20 +12,20 @@ class ConfigurationFile(configparser.ConfigParser):
         reset_password=False,
         duration_seconds=3600,
         auto_determine_ip_address=False,
-        region=None
+        region=None,
     )
 
     REQUIRED = [
-        'base_uri',
-        'client_id',
-        'client_secret',
-        'aws_app_id',
-        'subdomain',
+        "base_uri",
+        "client_id",
+        "client_secret",
+        "aws_app_id",
+        "subdomain",
     ]
 
     def __init__(self, config_file=None):
         super().__init__(
-            default_section='defaults',
+            default_section="defaults",
         )
 
         self.file = config_file
@@ -46,7 +46,7 @@ class ConfigurationFile(configparser.ConfigParser):
     def load(self):
         self.read_file(self.file)
 
-    def initialise(self, config_name='defaults'):
+    def initialise(self, config_name="defaults"):
         """
         Prompt the user for configurations, and save them to the
         onelogin-aws-cli config file
@@ -57,32 +57,38 @@ class ConfigurationFile(configparser.ConfigParser):
             self.add_section(config_name)
             config_section = self.section(config_name)
 
-        config_section['base_uri'] = user_choice(
-            "Pick a Onelogin API server:", [
-                "https://api.us.onelogin.com/",
-                "https://api.eu.onelogin.com/"
-            ]
+        config_section["base_uri"] = user_choice(
+            "Pick a Onelogin API server:",
+            ["https://api.us.onelogin.com/", "https://api.eu.onelogin.com/"],
         )
 
-        print("\nOnelogin API credentials. These can be found at:\n"
-              "https://admin.us.onelogin.com/api_credentials")
-        config_section['client_id'] = input("Onelogin API Client ID: ")
-        config_section['client_secret'] = input("Onelogin API Client Secret: ")
-        print("\nOnelogin AWS App ID. This can be found at:\n"
-              "https://admin.us.onelogin.com/apps")
-        config_section['aws_app_id'] = input("Onelogin App ID for AWS: ")
-        print("\nOnelogin subdomain is 'company' for login domain of "
-              "'company.onelogin.com'")
-        config_section['subdomain'] = input("Onelogin subdomain: ")
+        print(
+            "\nOnelogin API credentials. These can be found at:\n"
+            "https://admin.us.onelogin.com/api_credentials"
+        )
+        config_section["client_id"] = input("Onelogin API Client ID: ")
+        config_section["client_secret"] = input("Onelogin API Client Secret: ")
+        print(
+            "\nOnelogin AWS App ID. This can be found at:\n"
+            "https://admin.us.onelogin.com/apps"
+        )
+        config_section["aws_app_id"] = input("Onelogin App ID for AWS: ")
+        print(
+            "\nOnelogin subdomain is 'company' for login domain of "
+            "'company.onelogin.com'"
+        )
+        config_section["subdomain"] = input("Onelogin subdomain: ")
 
         self.save()
 
     def save(self):
         """Save this config to disk"""
         self.write(self.file)
-        print("Configuration written to '{}'".format(
-            self.file.name if hasattr(self.file, 'name') else self.file,
-        ))
+        print(
+            "Configuration written to '{}'".format(
+                self.file.name if hasattr(self.file, "name") else self.file,
+            )
+        )
 
     def section(self, section_name: str):
         """
@@ -113,9 +119,7 @@ class Section(object):
         Returns true if the section (including the defaults fallback)
         contains all the required keys.
         """
-        return all([
-            self.__contains__(item) for item in ConfigurationFile.REQUIRED
-        ])
+        return all([self.__contains__(item) for item in ConfigurationFile.REQUIRED])
 
     @property
     def can_save_password(self) -> bool:
@@ -125,8 +129,9 @@ class Section(object):
         :return:
         """
         return self.config.getboolean(
-            self.section_name, "save_password",
-            fallback=self.config.DEFAULTS['save_password']
+            self.section_name,
+            "save_password",
+            fallback=self.config.DEFAULTS["save_password"],
         )
 
     @property
@@ -157,9 +162,11 @@ class Section(object):
         return self.config.DEFAULTS[item]
 
     def __contains__(self, item):
-        return (item in self._overrides) or \
-            self.config.has_option(self.section_name, item) or \
-            item in self.config.DEFAULTS
+        return (
+            (item in self._overrides)
+            or self.config.has_option(self.section_name, item)
+            or item in self.config.DEFAULTS
+        )
 
     def get(self, item, default=None):
         if self.__contains__(item):
