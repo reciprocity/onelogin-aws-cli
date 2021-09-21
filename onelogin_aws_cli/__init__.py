@@ -33,7 +33,7 @@ class OneloginAWS(object):
         self.config = config
         self.saml = None
         self.all_roles = None
-        self.role_arn = None
+        self.role_principal_arns = None
         self.credentials = None
         self.duration_seconds = int(config["duration_seconds"])
         self.user_credentials = UserCredentials(config)
@@ -150,26 +150,41 @@ class OneloginAWS(object):
         # If I have more than one role, ask the user which one they want,
         # otherwise just proceed
 
-        self.role_arn, self.principal_arn = user_role_prompt(
-            self.all_roles,
-            saved_choice=self.config.get("role_arn"),
-        )
+        role_arns_str = self.config.get("role_arns")
+
+        if role_arns_str:
+            role_arns = set(role_arns_str.split(","))
+
+            self.role_principal_arns = [
+                (role_arn, principal_arn)
+                for role_arn, principal_arn in self.all_roles
+                if role_arn in role_arns
+            ]
+        else:
+            self.role_principal_arns = [
+                user_role_prompt(
+                    self.all_roles,
+                    saved_choice=self.config.get("role_arn"),
+                )
+            ]
 
     def assume_role(self):
         """Perform an AWS SAML role assumption"""
 
-        if not self.role_arn:
+        if not self.role_principal_arns:
             self.get_role()
         if self.config["region"]:
             self.sts_client = boto3.client("sts", region_name=self.config["region"])
-        res = self.sts_client.assume_role_with_saml(
-            RoleArn=self.role_arn,
-            PrincipalArn=self.principal_arn,
-            SAMLAssertion=self.saml.saml_response,
-            DurationSeconds=self.duration_seconds,
-        )
 
-        self.credentials = res
+        self.credentials = [
+            self.sts_client.assume_role_with_saml(
+                RoleArn=role_arn,
+                PrincipalArn=principal_arn,
+                SAMLAssertion=self.saml.saml_response,
+                DurationSeconds=self.duration_seconds,
+            )
+            for role_arn, principal_arn in self.role_principal_arns
+        ]
 
     def save_credentials(self):
         """Save the AWS Federation credentials to disk"""
@@ -177,43 +192,50 @@ class OneloginAWS(object):
         if not self.credentials:
             self.assume_role()
 
-        creds = self.credentials["Credentials"]
-
         cred_file = self._initialize_credentials()
 
         cred_config = configparser.ConfigParser()
         cred_config.read(cred_file)
 
-        # Update with new credentials
-        name = self.credentials["AssumedRoleUser"]["Arn"]
-        m = re.search(r"(arn\:aws([\w-]*)\:sts\:\:)(.*)", name)
+        names = []
 
-        if m is not None:
-            name = m.group(3)
-        name = name.replace(":assumed-role", "")
-        if "profile" in self.config:
-            name = self.config["profile"]
+        for credentials in self.credentials:
+            creds = credentials["Credentials"]
 
-        # Initialize the profile block if it is undefined
-        if name not in cred_config:
-            cred_config[name] = {}
+            # Update with new credentials
+            name = credentials["AssumedRoleUser"]["Arn"]
+            m = re.search(r"(arn\:aws([\w-]*)\:sts\:\:)(.*)", name)
 
-        # Set each value specifically instead of overwriting the entire
-        # profile block in case they have other parameters defined
-        cred_config[name]["aws_access_key_id"] = creds["AccessKeyId"]
-        cred_config[name]["aws_secret_access_key"] = creds["SecretAccessKey"]
-        cred_config[name]["aws_session_token"] = creds["SessionToken"]
+            if m is not None:
+                name = m.group(3)
+            name = name.replace(":assumed-role", "")
+            if "profile" in self.config:
+                name = self.config["profile"]
 
-        # Set region for this profile if passed in via configuration
-        if self.config["region"]:
-            cred_config[name]["region"] = self.config["region"]
+            names.append(name)
 
-        with open(cred_file, "w") as cred_config_file:
-            cred_config.write(cred_config_file)
+            # Initialize the profile block if it is undefined
+            if name not in cred_config:
+                cred_config[name] = {}
+
+            # Set each value specifically instead of overwriting the entire
+            # profile block in case they have other parameters defined
+            cred_config[name]["aws_access_key_id"] = creds["AccessKeyId"]
+            cred_config[name]["aws_secret_access_key"] = creds["SecretAccessKey"]
+            cred_config[name]["aws_session_token"] = creds["SessionToken"]
+
+            # Set region for this profile if passed in via configuration
+            if self.config["region"]:
+                cred_config[name]["region"] = self.config["region"]
+
+            with open(cred_file, "w") as cred_config_file:
+                cred_config.write(cred_config_file)
 
         print("Credentials cached in '{}'".format(cred_file))
         print("Expires at {}".format(creds["Expiration"]))
-        print("Use aws cli with --profile " + name)
+
+        for name in names:
+            print("Use aws cli with --profile " + name)
 
         # Reset state in the case of another transaction
         self.credentials = None

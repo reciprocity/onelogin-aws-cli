@@ -60,6 +60,15 @@ class OneLoginAWSArgumentParser(argparse.ArgumentParser):
         )
 
         self.add_argument(
+            "--role-arns",
+            dest="role_arns",
+            action=EnvDefault,
+            required=False,
+            default=None,
+            help="Specify default role arns (comma separated)",
+        )
+
+        self.add_argument(
             "--reset-password",
             dest="reset_password",
             action="store_true",
